@@ -12,6 +12,18 @@ Assets para la charla *Profiling + IA: el nuevo pilar de la observabilidad* (29 
 - Organización y stack de Grafana Cloud con endpoints de Prometheus y Pyroscope (URLs y `User/API key`).
 - Workloads Java con el agente de Pyroscope habilitado y escuchando en el puerto 4040 (o el que definas en las anotaciones del pod).
 
+## Infra mínima en Google Cloud con Terraform (GKE de 1 nodo)
+1. Revisa y ajusta los valores en `terraform/terraform.tfvars.example` (ID de proyecto, región, nombre del clúster, tipo de máquina).
+2. Inicializa y despliega el clúster de prueba (crea un pool preemptible de 1 nodo para la demo):
+   ```bash
+   cd terraform
+   terraform init
+   terraform apply -var-file=terraform.tfvars.example
+   ```
+3. Carga las credenciales de kubeconfig que devuelve la salida `get_credentials` y vuelve al raíz del repo para aplicar Kustomize.
+
+> El clúster se crea con Workload Identity habilitado para que el pipeline de GitHub Actions pueda autenticarse sin llaves largas.
+
 ## Despliegue rápido (kustomize/base)
 1. Clona el repositorio y usa la rama activa como `main` si tu clone lo requiere:
    ```bash
@@ -62,6 +74,22 @@ Assets para la charla *Profiling + IA: el nuevo pilar de la observabilidad* (29 
 - Muestra la etiqueta `service_name` en Pyroscope; proviene de la anotación `pyroscope.grafana.com/application_name`.
 - Si cambias el puerto del agente Java, ajusta la anotación `pyroscope.grafana.com/port` para que el relabeling reescriba `__address__` correctamente.
 - Mantén abierta la vista de Grafana Assistant para pedir resúmenes en español y recomendaciones de optimización sobre el flame graph activo.
+
+## Pipeline CI/CD (GitHub Actions ➜ GKE ➜ Grafana Cloud)
+- Workflow: `.github/workflows/deploy.yaml`.
+- Autenticación: Workload Identity Federation (`secrets.GCP_WORKLOAD_IDENTITY_PROVIDER` + `secrets.GCP_SERVICE_ACCOUNT`), sin llaves en claro.
+- Variables de repositorio requeridas (`Settings > Variables`):
+  - `GCP_PROJECT_ID`, `GKE_CLUSTER`, `GKE_LOCATION`
+  - `GRAFANA_CLOUD_USER` (por ejemplo `986364` para `alvaronicolas-profiles`)
+- Secret requerido (`Settings > Secrets and variables > Actions`):
+  - `GRAFANA_CLOUD_API_KEY` (token de Grafana.com con permisos de Pyroscope)
+- Flujo de despliegue:
+  1. `kubectl`/`kustomize` se instalan en el runner.
+  2. `gcloud container clusters get-credentials` usa las variables anteriores.
+  3. Se genera `kustomize/overlays/alvaronicolas-profiles/secret.env` con las credenciales del stack.
+  4. `kustomize build ... | kubectl apply -f -` aplica el DaemonSet de Alloy y el Secret para Grafana Cloud.
+
+> El workflow corre en pushes a `main` o manualmente (`workflow_dispatch`). Puedes cambiar el overlay o namespace modificando el archivo de workflow.
 
 ## Limpieza
 ```bash
