@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: observability
+data:
+  config.alloy: |
+    logging {
+      level = "info"
+      format = "logfmt"
+    }
+
+    discovery.kubernetes "pods" {
+      role = "pod"
+      selectors = [{ role = "pod" }]
+    }
+
+    pyroscope.scrape "default" {
+      targets = discovery.kubernetes.pods.outputs.targets
+      scrape_interval = "15s"
+
+      profiling_config {
+        pprof {
+          path = "/pyroscope"
+        }
+      }
+
+      relabel_rules = [
+        {
+          source_labels = ["__meta_kubernetes_pod_annotation_pyroscope_grafana_com_scrape"]
+          action = "keep"
+          regex = "true"
+        },
+        {
+          source_labels = ["__meta_kubernetes_pod_annotation_pyroscope_grafana_com_application_name"]
+          target_label = "service_name"
+          action = "replace"
+          regex = "(.+)"
+          replacement = "$1"
+        },
+        {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label = "namespace"
+          action = "replace"
+          regex = "(.+)"
+          replacement = "$1"
+        },
+        {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label = "pod"
+          action = "replace"
+          regex = "(.+)"
+          replacement = "$1"
+        },
+        {
+          source_labels = ["__address__", "__meta_kubernetes_pod_annotation_pyroscope_grafana_com_port"]
+          target_label = "__address__"
+          action = "replace"
+          regex = "([^:]+)(?::\\d+)?;(.*)"
+          replacement = "$1:$2"
+        },
+      ]
+
+      forward_to = [pyroscope.write.grafana_cloud.receiver]
+    }
+
+    pyroscope.write "grafana_cloud" {
+      endpoint {
+        url = env("PYROSCOPE_REMOTE_WRITE")
+        basic_auth {
+          username = env("GRAFANA_CLOUD_USER")
+          password = env("GRAFANA_CLOUD_API_KEY")
+        }
+      }
+    }
+
+    prometheus.scrape "alloy" {
+      targets = [
+        {
+          __address__ = "127.0.0.1:12345"
+          job         = "alloy"
+        },
+      ]
+      forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+    }
+
+    prometheus.remote_write "grafana_cloud" {
+      endpoint {
+        url = env("PROM_REMOTE_WRITE")
+        basic_auth {
+          username = env("GRAFANA_CLOUD_USER")
+          password = env("GRAFANA_CLOUD_API_KEY")
+        }
+      }
+    }

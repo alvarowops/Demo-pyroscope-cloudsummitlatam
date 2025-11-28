@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: alloy
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: alloy
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alloy
+    spec:
+      serviceAccountName: alloy
+      volumes:
+        - name: config
+          configMap:
+            name: alloy-config
+            items:
+              - key: config.alloy
+                path: config.alloy
+      containers:
+        - name: alloy
+          image: grafana/alloy:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "run"
+            - "--server.http.listen-addr=0.0.0.0:12345"
+            - "/etc/alloy/config.alloy"
+          ports:
+            - name: http-metrics
+              containerPort: 12345
+              protocol: TCP
+          env:
+            - name: GRAFANA_CLOUD_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud
+                  key: GRAFANA_CLOUD_USER
+            - name: GRAFANA_CLOUD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud
+                  key: GRAFANA_CLOUD_API_KEY
+            - name: PYROSCOPE_REMOTE_WRITE
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud
+                  key: PYROSCOPE_REMOTE_WRITE
+            - name: PROM_REMOTE_WRITE
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud
+                  key: PROM_REMOTE_WRITE
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
