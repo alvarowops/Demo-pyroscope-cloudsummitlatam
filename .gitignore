@@ -1,0 +1,2 @@
+# Avoid committing stack-specific secrets
+kustomize/overlays/**/secret.env
