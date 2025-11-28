@@ -1,0 +1,61 @@
+name: deploy-to-gke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GKE_CLUSTER: ${{ vars.GKE_CLUSTER }}
+  GKE_LOCATION: ${{ vars.GKE_LOCATION }}
+  GRAFANA_CLOUD_USER: ${{ vars.GRAFANA_CLOUD_USER }}
+  GRAFANA_PROFILES_URL: https://profiles-prod-001.grafana.net
+  PROM_REMOTE_WRITE: https://prometheus-prod-24-prod-us-east-0.grafana.net/api/prom/push
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: 'access_token'
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Install kubectl and kustomize
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y kubectl kustomize
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials "$GKE_CLUSTER" --region "$GKE_LOCATION" --project "$GCP_PROJECT_ID"
+
+      - name: Materialize Grafana Cloud secret for overlay
+        run: |
+          cat > kustomize/overlays/alvaronicolas-profiles/secret.env <<'SECRETS'
+          GRAFANA_CLOUD_USER=${GRAFANA_CLOUD_USER}
+          GRAFANA_CLOUD_API_KEY=${{ secrets.GRAFANA_CLOUD_API_KEY }}
+          PYROSCOPE_REMOTE_WRITE=${GRAFANA_PROFILES_URL}
+          PROM_REMOTE_WRITE=${PROM_REMOTE_WRITE}
+          SECRETS
+
+      - name: Deploy Alloy (alvaronicolas-profiles overlay)
+        run: |
+          kustomize build kustomize/overlays/alvaronicolas-profiles | kubectl apply -f -

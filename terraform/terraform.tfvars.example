@@ -1,0 +1,7 @@
+project_id       = "my-gcp-project-id"
+region           = "us-east1"
+cluster_name     = "pyroscope-demo"
+node_count       = 1
+machine_type     = "e2-standard-2"
+node_service_account = ""
+preemptible      = true
