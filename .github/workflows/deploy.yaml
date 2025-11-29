@@ -48,6 +48,20 @@ jobs:
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"  | bash
           sudo mv kustomize /usr/local/bin/
 
+      - name: Install Alloy CLI
+        run: |
+          curl -sL https://github.com/grafana/alloy/releases/latest/download/alloy-linux-amd64.zip -o alloy.zip
+          unzip -q alloy.zip
+          chmod +x alloy-linux-amd64
+          sudo mv alloy-linux-amd64 /usr/local/bin/alloy
+
+      - name: Validate and format Alloy config
+        run: |
+          # Extraer el config de Alloy del ConfigMap y validar
+          yq '.data["config.alloy"]' kustomize/base/alloy-configmap.yaml > /tmp/config.alloy
+          alloy fmt /tmp/config.alloy
+          echo "✅ Alloy config is valid"
+
       - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v2
         with:
