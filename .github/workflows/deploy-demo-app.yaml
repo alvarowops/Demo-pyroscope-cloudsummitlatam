@@ -1,0 +1,116 @@
+name: deploy-demo-app
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - delete
+          - restart
+
+env:
+  GKE_CLUSTER: pyroscope-demo
+  GKE_LOCATION: us-east1
+  GAR_LOCATION: us-east1
+  REPOSITORY: demo-repo
+  IMAGE: java-demo-app
+
+jobs:
+  deploy-demo-app:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - name: Extract GCP Project ID from credentials
+        run: |
+          PROJECT_ID=$(echo '${{ secrets.GCP_CREDENTIALS }}' | jq -r '.project_id')
+          echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          install_components: 'gke-gcloud-auth-plugin'
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker $GAR_LOCATION-docker.pkg.dev
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GKE_LOCATION }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Build and Push Docker image
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          cd demo-app
+          docker build \
+            --platform linux/amd64 \
+            --tag "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA" \
+            --tag "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:latest" \
+            .
+          docker push "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA"
+          docker push "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:latest"
+
+      - name: Update deployment image reference
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          sed -i "s|image:.*java-demo-app.*|image: $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA|" demo-app/k8s/deployment.yaml
+
+      - name: Deploy Java Demo App
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          kubectl apply -f demo-app/k8s/deployment.yaml
+          kubectl rollout status deployment/java-demo-app -n default --timeout=120s
+          echo "✅ Java Demo App deployed successfully!"
+          echo ""
+          echo "📊 Endpoints disponibles:"
+          echo "  - /health - Health check"
+          echo "  - /cpu-sync - Genera carga de CPU (sync)"
+          echo "  - /cpu-async - Genera carga de CPU (async)"
+          echo "  - /memory - Genera memory leak"
+          echo ""
+          echo "🔥 Para generar carga:"
+          echo "  kubectl port-forward svc/java-demo-app 8080:80"
+          echo "  curl http://localhost:8080/cpu-sync"
+
+      - name: Delete Java Demo App
+        if: ${{ github.event.inputs.action == 'delete' }}
+        run: |
+          kubectl delete -f demo-app/k8s/deployment.yaml --ignore-not-found
+          echo "🗑️ Java Demo App deleted"
+
+      - name: Restart Java Demo App
+        if: ${{ github.event.inputs.action == 'restart' }}
+        run: |
+          kubectl rollout restart deployment/java-demo-app -n default
+          kubectl rollout status deployment/java-demo-app -n default --timeout=120s
+          echo "🔄 Java Demo App restarted"
+
+      - name: Show pod status
+        run: |
+          echo "📦 Pod status:"
+          kubectl get pods -n default -l app=java-demo-app
+          echo ""
+          echo "🔍 Alloy targets (pods con anotación pyroscope):"
+          kubectl get pods --all-namespaces -o json | jq -r '.items[] | select(.metadata.annotations["pyroscope.grafana.com/scrape"] == "true") | "\(.metadata.namespace)/\(.metadata.name)"'
