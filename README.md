@@ -6,7 +6,6 @@ Assets para la charla *Profiling + IA: el nuevo pilar de la observabilidad* (29 
 - **Manifiestos de Kubernetes (kustomize/base):** DaemonSet de Grafana Alloy, ConfigMap con el pipeline River, RBAC y Secret para credenciales de Grafana Cloud.
 - **Flujo de datos:** Los pods anotados con `pyroscope.grafana.com/scrape=true` exponen perfiles pprof en el puerto indicado; Alloy los descubre y los envía a Grafana Cloud (Pyroscope y Prometheus remote write).
 - **Guía de demo:** Pasos para preparar el laboratorio en Google Cloud y validar que el profiling está llegando a Grafana Cloud.
-- **Runbook rápido:** `docs/run-demo-locally.md` resume cómo probar todo en tu máquina (Cloud Shell o laptop) usando el Makefile y un clúster GKE existente.
 
 ## Requisitos previos
 - Clúster Kubernetes en Google Cloud (GKE o Autopilot) con `kubectl` configurado.
@@ -78,14 +77,12 @@ Assets para la charla *Profiling + IA: el nuevo pilar de la observabilidad* (29 
 
 ## Pipeline CI/CD (GitHub Actions ➜ GKE ➜ Grafana Cloud)
 - Workflow: `.github/workflows/deploy.yaml`.
-- Autenticación: prioriza Workload Identity Federation (`secrets.GCP_WORKLOAD_IDENTITY_PROVIDER` + `secrets.GCP_SERVICE_ACCOUNT`); si no hay WIF disponible, usa una llave JSON (`secrets.GCP_CREDENTIALS_JSON`). El workflow falla temprano con un mensaje claro si faltan secretos.
+- Autenticación: Workload Identity Federation (`secrets.GCP_WORKLOAD_IDENTITY_PROVIDER` + `secrets.GCP_SERVICE_ACCOUNT`), sin llaves en claro.
 - Variables de repositorio requeridas (`Settings > Variables`):
   - `GCP_PROJECT_ID`, `GKE_CLUSTER`, `GKE_LOCATION`
   - `GRAFANA_CLOUD_USER` (por ejemplo `986364` para `alvaronicolas-profiles`)
 - Secret requerido (`Settings > Secrets and variables > Actions`):
   - `GRAFANA_CLOUD_API_KEY` (token de Grafana.com con permisos de Pyroscope)
-- Secrets opcionales (solo si no usas WIF):
-  - `GCP_CREDENTIALS_JSON` (llave de servicio en formato JSON para autenticación directa)
 - Flujo de despliegue:
   1. `kubectl`/`kustomize` se instalan en el runner.
   2. `gcloud container clusters get-credentials` usa las variables anteriores.
