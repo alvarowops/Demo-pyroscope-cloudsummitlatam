@@ -7,3 +7,4 @@ kustomize/overlays/**/secret.env
 *.tfstate.backup
 terraform.tfvars
 demo-app/gcp-key.json
+demo-app/gcp-key.json

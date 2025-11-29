@@ -16,12 +16,10 @@ secret-env:
 	@test -n "$(GRAFANA_CLOUD_USER)" || (echo "GRAFANA_CLOUD_USER requerido" && exit 1)
 	@test -n "$(GRAFANA_CLOUD_API_KEY)" || (echo "GRAFANA_CLOUD_API_KEY requerido" && exit 1)
 	@echo "Escribiendo $(OVERLAY)/secret.env"
-	@cat > $(OVERLAY)/secret.env <<EOF_SECRET
-GRAFANA_CLOUD_USER=$(GRAFANA_CLOUD_USER)
-GRAFANA_CLOUD_API_KEY=$(GRAFANA_CLOUD_API_KEY)
-PYROSCOPE_REMOTE_WRITE=$(PYROSCOPE_REMOTE_WRITE)
-PROM_REMOTE_WRITE=$(PROM_REMOTE_WRITE)
-EOF_SECRET
+	@echo "GRAFANA_CLOUD_USER=$(GRAFANA_CLOUD_USER)" > $(OVERLAY)/secret.env
+	@echo "GRAFANA_CLOUD_API_KEY=$(GRAFANA_CLOUD_API_KEY)" >> $(OVERLAY)/secret.env
+	@echo "PYROSCOPE_REMOTE_WRITE=$(PYROSCOPE_REMOTE_WRITE)" >> $(OVERLAY)/secret.env
+	@echo "PROM_REMOTE_WRITE=$(PROM_REMOTE_WRITE)" >> $(OVERLAY)/secret.env
 
 # Aplica el overlay seleccionado (default: alvaronicolas-profiles)
 # Requiere kubeconfig apuntando al clúster GKE
