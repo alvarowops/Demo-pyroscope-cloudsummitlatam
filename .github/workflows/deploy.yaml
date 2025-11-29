@@ -11,10 +11,9 @@ permissions:
   id-token: write
 
 env:
-  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-  GKE_CLUSTER: ${{ vars.GKE_CLUSTER }}
-  GKE_LOCATION: ${{ vars.GKE_LOCATION }}
-  GRAFANA_CLOUD_USER: ${{ vars.GRAFANA_CLOUD_USER }}
+  GKE_CLUSTER: pyroscope-demo
+  GKE_LOCATION: us-east1
+  GRAFANA_CLOUD_USER: 986364
   GRAFANA_PROFILES_URL: https://profiles-prod-001.grafana.net
   PROM_REMOTE_WRITE: https://prometheus-prod-24-prod-us-east-0.grafana.net/api/prom/push
 
@@ -27,9 +26,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - name: Extract GCP Project ID from credentials
+        run: |
+          GCP_PROJECT_ID=$(echo '${{ secrets.GCP_CREDENTIALS }}' | jq -r '.project_id')
+          echo "GCP_PROJECT_ID=$GCP_PROJECT_ID" >> $GITHUB_ENV
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
@@ -47,13 +52,14 @@ jobs:
           gcloud container clusters get-credentials "$GKE_CLUSTER" --region "$GKE_LOCATION" --project "$GCP_PROJECT_ID"
 
       - name: Materialize Grafana Cloud secret for overlay
+        env:
+          GRAFANA_CLOUD_API_KEY: ${{ secrets.GRAFANA_CLOUD_API_KEY }}
         run: |
-          cat > kustomize/overlays/alvaronicolas-profiles/secret.env <<'SECRETS'
-          GRAFANA_CLOUD_USER=${GRAFANA_CLOUD_USER}
-          GRAFANA_CLOUD_API_KEY=${{ secrets.GRAFANA_CLOUD_API_KEY }}
-          PYROSCOPE_REMOTE_WRITE=${GRAFANA_PROFILES_URL}
-          PROM_REMOTE_WRITE=${PROM_REMOTE_WRITE}
-          SECRETS
+          # Crear el archivo de secretos usando las variables de entorno
+          echo "GRAFANA_CLOUD_USER=$GRAFANA_CLOUD_USER" > kustomize/overlays/alvaronicolas-profiles/secret.env
+          echo "GRAFANA_CLOUD_API_KEY=$GRAFANA_CLOUD_API_KEY" >> kustomize/overlays/alvaronicolas-profiles/secret.env
+          echo "PYROSCOPE_REMOTE_WRITE=$GRAFANA_PROFILES_URL" >> kustomize/overlays/alvaronicolas-profiles/secret.env
+          echo "PROM_REMOTE_WRITE=$PROM_REMOTE_WRITE" >> kustomize/overlays/alvaronicolas-profiles/secret.env
 
       - name: Deploy Alloy (alvaronicolas-profiles overlay)
         run: |
