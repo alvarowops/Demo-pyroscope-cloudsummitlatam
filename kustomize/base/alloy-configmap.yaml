@@ -69,6 +69,19 @@ data:
         source_labels = ["__meta_kubernetes_pod_container_name"]
         target_label  = "container"
       }
+
+      // GitHub integration labels for source code navigation
+      rule {
+        target_label = "service_repository"
+        replacement  = "https://github.com/alvarowops/Demo-pyroscope-cloudsummitlatam"
+        action       = "replace"
+      }
+
+      rule {
+        target_label = "service_git_ref"
+        replacement  = "main"
+        action       = "replace"
+      }
     }
 
     // Auto-instrumentation for Java using async-profiler
