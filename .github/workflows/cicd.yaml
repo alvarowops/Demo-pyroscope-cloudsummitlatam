@@ -1,0 +1,73 @@
+name: Build and Deploy to GKE
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'demo-app/**'
+
+env:
+  PROJECT_ID: level-climber-438302-t1
+  GAR_LOCATION: us-east1
+  GKE_CLUSTER: pyroscope-demo
+  GKE_ZONE: us-east1
+  REPOSITORY: demo-repo
+  IMAGE: java-demo-app
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+    # environment: production # Comentado para usar secretos globales
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # Autenticación con Google Cloud usando Workload Identity Federation
+    # (Recomendado) o Service Account Key JSON
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+    # Configurar Docker para usar gcloud como helper de credenciales
+    - name: Docker configuration
+      run: |-
+        gcloud auth configure-docker $GAR_LOCATION-docker.pkg.dev
+
+    # Obtener credenciales de GKE
+    - name: Set up GKE credentials
+      uses: google-github-actions/get-gke-credentials@v2
+      with:
+        cluster_name: ${{ env.GKE_CLUSTER }}
+        location: ${{ env.GKE_ZONE }}
+
+    # Construir la imagen Docker
+    - name: Build
+      run: |-
+        cd demo-app
+        docker build \
+          --tag "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA" \
+          --tag "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:latest" \
+          --build-arg GITHUB_SHA="$GITHUB_SHA" \
+          --build-arg GITHUB_REF="$GITHUB_REF" \
+          .
+
+    # Subir la imagen a Artifact Registry
+    - name: Publish
+      run: |-
+        docker push "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA"
+        docker push "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:latest"
+
+    # Desplegar a GKE actualizando la imagen en el deployment
+    - name: Deploy
+      run: |-
+        kubectl set image deployment/java-demo-app java-demo-app=$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA
+        kubectl rollout status deployment/java-demo-app
