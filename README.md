@@ -91,6 +91,29 @@ Assets para la charla *Profiling + IA: el nuevo pilar de la observabilidad* (29 
 
 > El workflow corre en pushes a `main` o manualmente (`workflow_dispatch`). Puedes cambiar el overlay o namespace modificando el archivo de workflow.
 
+## Cómo probar el despliegue a mano (sin esperar al pipeline)
+1. Autentícate en Google Cloud y apunta `kubectl` al clúster (usa las salidas de Terraform o tus parámetros reales):
+   ```bash
+   gcloud auth login
+   gcloud container clusters get-credentials $GKE_CLUSTER --region $GKE_LOCATION --project $GCP_PROJECT_ID
+   ```
+2. Exporta tus credenciales de Grafana Cloud y ejecuta el target `deploy` del `Makefile`, que genera `secret.env` y aplica el overlay `alvaronicolas-profiles`:
+   ```bash
+   export GRAFANA_CLOUD_USER=986364 \
+          GRAFANA_CLOUD_API_KEY="glc_..." \
+          PYROSCOPE_REMOTE_WRITE=https://profiles-prod-001.grafana.net \
+          PROM_REMOTE_WRITE=https://prometheus-prod-24-prod-us-east-0.grafana.net/api/prom/push
+   make deploy
+   ```
+3. Verifica que Alloy esté corriendo y empujando perfiles:
+   ```bash
+   kubectl get pods -n observability -l app.kubernetes.io/name=alloy
+   make logs
+   ```
+4. Anota tu pod Java (o workload instrumentado) con `pyroscope.grafana.com/scrape=true` y revisa en Grafana Cloud > Pyroscope que aparezcan nuevas series.
+
+> Para limpiar el entorno rápidamente: `make destroy`.
+
 ## Limpieza
 ```bash
 kubectl delete -k kustomize/base
