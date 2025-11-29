@@ -25,6 +25,11 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
+        env:
+          # JVM flags recomendadas para async-profiler
+          # Permiten muestreo fuera de safepoints y mejor captura de métodos inline
+          - name: JAVA_TOOL_OPTIONS
+            value: "-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints"
         resources:
           requests:
             memory: "256Mi"

@@ -10,55 +10,92 @@ data:
       format = "logfmt"
     }
 
-    // Discover Java pods with pyroscope annotation
-    discovery.kubernetes "pods" {
+    // Discover pods on the same node as Alloy
+    discovery.kubernetes "local_pods" {
+      selectors {
+        field = "spec.nodeName=" + env("HOSTNAME")
+        role  = "pod"
+      }
       role = "pod"
     }
 
-    discovery.relabel "java_pods" {
-      targets = discovery.kubernetes.pods.targets
+    // Discover processes and join with Kubernetes pod discovery
+    discovery.process "all" {
+      join = discovery.kubernetes.local_pods.targets
+    }
 
+    // Filter and relabel Java processes
+    discovery.relabel "java_pods" {
+      targets = discovery.process.all.targets
+
+      // Filter only java processes
+      rule {
+        source_labels = ["__meta_process_exe"]
+        action        = "keep"
+        regex         = ".*/java$"
+      }
+
+      // Drop pods that are not running
+      rule {
+        action        = "drop"
+        regex         = "Succeeded|Failed|Completed"
+        source_labels = ["__meta_kubernetes_pod_phase"]
+      }
+
+      // Keep only pods with pyroscope scrape annotation
       rule {
         source_labels = ["__meta_kubernetes_pod_annotation_pyroscope_grafana_com_scrape"]
         action        = "keep"
         regex         = "true"
       }
 
+      // Set namespace label
       rule {
-        source_labels = ["__meta_kubernetes_pod_annotation_pyroscope_grafana_com_application_name"]
-        target_label  = "service_name"
         action        = "replace"
-      }
-
-      rule {
         source_labels = ["__meta_kubernetes_namespace"]
         target_label  = "namespace"
-        action        = "replace"
       }
 
+      // Set pod label
       rule {
+        action        = "replace"
         source_labels = ["__meta_kubernetes_pod_name"]
         target_label  = "pod"
-        action        = "replace"
       }
 
+      // Set node label
       rule {
-        source_labels = ["__meta_kubernetes_pod_container_id"]
-        target_label  = "__container_id__"
         action        = "replace"
+        source_labels = ["__meta_kubernetes_pod_node_name"]
+        target_label  = "node"
+      }
+
+      // Set container label
+      rule {
+        action        = "replace"
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+
+      // Set service_name from annotation or infer from namespace/container
+      rule {
+        action        = "replace"
+        source_labels = ["__meta_kubernetes_pod_annotation_pyroscope_grafana_com_application_name"]
+        target_label  = "service_name"
       }
     }
 
     // Auto-instrumentation for Java using async-profiler
-    pyroscope.java "java_pods" {
-      targets    = discovery.relabel.java_pods.output
+    pyroscope.java "java" {
       forward_to = [pyroscope.write.grafana_cloud.receiver]
+      targets    = discovery.relabel.java_pods.output
 
       profiling_config {
-        interval   = "15s"
-        cpu        = true
-        alloc      = "512k"
-        lock       = "10ms"
+        interval    = "15s"
+        cpu         = true
+        sample_rate = 100
+        alloc       = "512k"
+        lock        = "10ms"
       }
     }
 

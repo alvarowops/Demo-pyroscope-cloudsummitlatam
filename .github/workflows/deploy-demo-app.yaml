@@ -77,12 +77,23 @@ jobs:
         run: |
           sed -i "s|image:.*java-demo-app.*|image: $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA|" demo-app/k8s/deployment.yaml
 
+      - name: Create Grafana Cloud secret in default namespace
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        env:
+          GRAFANA_CLOUD_API_KEY: ${{ secrets.GRAFANA_CLOUD_API_KEY }}
+        run: |
+          kubectl create secret generic grafana-cloud \
+            --namespace=default \
+            --from-literal=GRAFANA_CLOUD_USER=986364 \
+            --from-literal=GRAFANA_CLOUD_API_KEY="$GRAFANA_CLOUD_API_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy Java Demo App
         if: ${{ github.event.inputs.action == 'deploy' }}
         run: |
           kubectl apply -f demo-app/k8s/deployment.yaml
           kubectl rollout status deployment/java-demo-app -n default --timeout=120s
-          echo "✅ Java Demo App deployed successfully!"
+          echo "✅ Java Demo App deployed successfully with Pyroscope Java Agent!"
           echo ""
           echo "📊 Endpoints disponibles:"
           echo "  - /health - Health check"
@@ -93,6 +104,8 @@ jobs:
           echo "🔥 Para generar carga:"
           echo "  kubectl port-forward svc/java-demo-app 8080:80"
           echo "  curl http://localhost:8080/cpu-sync"
+          echo ""
+          echo "📈 Los profiles se envían directamente a Grafana Cloud Pyroscope"
 
       - name: Delete Java Demo App
         if: ${{ github.event.inputs.action == 'delete' }}
