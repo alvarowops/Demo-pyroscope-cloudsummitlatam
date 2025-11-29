@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-demo-app
+  namespace: default
+  labels:
+    app: java-demo-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: java-demo-app
+  template:
+    metadata:
+      labels:
+        app: java-demo-app
+      annotations:
+        # Estas anotaciones son CLAVE para que Alloy descubra y perfile este pod
+        pyroscope.grafana.com/scrape: "true"
+        pyroscope.grafana.com/application-name: "java-demo-app"
+        pyroscope.grafana.com/profile-cpu-enabled: "true"
+        pyroscope.grafana.com/profile-mem-enabled: "true"
+        pyroscope.grafana.com/port: "8080"
+    spec:
+      containers:
+      - name: java-demo-app
+        image: us-east1-docker.pkg.dev/level-climber-438302-t1/demo-repo/java-demo-app:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-demo-app
+  namespace: default
+spec:
+  selector:
+    app: java-demo-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: LoadBalancer
