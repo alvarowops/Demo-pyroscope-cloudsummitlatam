@@ -15,6 +15,7 @@ spec:
         app.kubernetes.io/name: alloy
     spec:
       serviceAccountName: alloy
+      hostPID: true  # Required for pyroscope.java to access Java processes
       volumes:
         - name: config
           configMap:
@@ -22,6 +23,12 @@ spec:
             items:
               - key: config.alloy
                 path: config.alloy
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+        - name: proc
+          hostPath:
+            path: /proc
       containers:
         - name: alloy
           image: grafana/alloy:latest
@@ -30,6 +37,9 @@ spec:
             - "run"
             - "--server.http.listen-addr=0.0.0.0:12345"
             - "/etc/alloy/config.alloy"
+          securityContext:
+            privileged: true  # Required for async-profiler to attach to JVM
+            runAsUser: 0
           ports:
             - name: http-metrics
               containerPort: 12345
@@ -58,13 +68,19 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /etc/alloy
+            - name: cgroup
+              mountPath: /sys/fs/cgroup
+              readOnly: true
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
           resources:
             requests:
               cpu: 100m
-              memory: 128Mi
+              memory: 256Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 1000m
+              memory: 1Gi
         - name: config-reloader
           image: ghcr.io/jimmidyson/configmap-reload:v0.14.0
           args:

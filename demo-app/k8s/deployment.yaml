@@ -15,12 +15,9 @@ spec:
       labels:
         app: java-demo-app
       annotations:
-        # Estas anotaciones son CLAVE para que Alloy descubra y perfile este pod
+        # Anotaciones para que Alloy descubra y perfile este pod con async-profiler
         pyroscope.grafana.com/scrape: "true"
         pyroscope.grafana.com/application-name: "java-demo-app"
-        pyroscope.grafana.com/profile-cpu-enabled: "true"
-        pyroscope.grafana.com/profile-mem-enabled: "true"
-        pyroscope.grafana.com/port: "8080"
     spec:
       containers:
       - name: java-demo-app

@@ -10,6 +10,7 @@ data:
       format = "logfmt"
     }
 
+    // Discover Java pods with pyroscope annotation
     discovery.kubernetes "pods" {
       role = "pod"
     }
@@ -42,25 +43,22 @@ data:
       }
 
       rule {
-        source_labels = ["__address__", "__meta_kubernetes_pod_annotation_pyroscope_grafana_com_port"]
-        target_label  = "__address__"
+        source_labels = ["__meta_kubernetes_pod_container_id"]
+        target_label  = "__container_id__"
         action        = "replace"
-        regex         = "([^:]+)(?::\\d+)?;(.*)"
-        replacement   = "$1:$2"
       }
     }
 
-    pyroscope.scrape "java_pods" {
+    // Auto-instrumentation for Java using async-profiler
+    pyroscope.java "java_pods" {
       targets    = discovery.relabel.java_pods.output
       forward_to = [pyroscope.write.grafana_cloud.receiver]
 
       profiling_config {
-        profile.process_cpu {
-          enabled = true
-        }
-        profile.memory {
-          enabled = true
-        }
+        interval   = "15s"
+        cpu        = true
+        alloc      = "512k"
+        lock       = "10ms"
       }
     }
 
@@ -88,5 +86,7 @@ data:
           username = env("GRAFANA_CLOUD_USER")
           password = env("GRAFANA_CLOUD_API_KEY")
         }
+      }
+    }
       }
     }
