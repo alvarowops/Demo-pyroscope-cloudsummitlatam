@@ -65,3 +65,20 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+        - name: config-reloader
+          image: ghcr.io/jimmidyson/configmap-reload:v0.14.0
+          args:
+            - --volume-dir=/etc/alloy
+            - --webhook-url=http://localhost:12345/-/reload
+            - --webhook-method=POST
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
