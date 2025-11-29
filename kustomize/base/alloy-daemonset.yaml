@@ -26,25 +26,38 @@ spec:
         - name: cgroup
           hostPath:
             path: /sys/fs/cgroup
-        - name: proc
+        - name: varlog
           hostPath:
-            path: /proc
+            path: /var/log
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
       containers:
         - name: alloy
-          image: grafana/alloy:latest
+          image: grafana/alloy:v1.8.3
           imagePullPolicy: IfNotPresent
           args:
-            - "run"
-            - "--server.http.listen-addr=0.0.0.0:12345"
-            - "/etc/alloy/config.alloy"
+            - run
+            - /etc/alloy/config.alloy
+            - --server.http.listen-addr=0.0.0.0:12345
           securityContext:
-            privileged: true  # Required for async-profiler to attach to JVM
             runAsUser: 0
+            runAsNonRoot: false
+            capabilities:
+              add:
+                - PERFMON
+                - SYS_PTRACE
+                - SYS_RESOURCE
+                - SYS_ADMIN
           ports:
             - name: http-metrics
               containerPort: 12345
               protocol: TCP
           env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: GRAFANA_CLOUD_USER
               valueFrom:
                 secretKeyRef:
@@ -71,8 +84,11 @@ spec:
             - name: cgroup
               mountPath: /sys/fs/cgroup
               readOnly: true
-            - name: proc
-              mountPath: /host/proc
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
               readOnly: true
           resources:
             requests:
@@ -81,6 +97,19 @@ spec:
             limits:
               cpu: 1000m
               memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 12345
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
+          livenessProbe:
+            httpGet:
+              path: /-/health
+              port: 12345
+            initialDelaySeconds: 20
+            timeoutSeconds: 5
+            periodSeconds: 10
         - name: config-reloader
           image: ghcr.io/jimmidyson/configmap-reload:v0.14.0
           args:
