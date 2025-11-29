@@ -7,6 +7,13 @@ terraform {
       version = "~> 5.34"
     }
   }
+
+  # Remote backend for state storage
+  # Uncomment and configure for CI/CD
+  # backend "gcs" {
+  #   bucket = "YOUR_PROJECT_ID-terraform-state"
+  #   prefix = "pyroscope-demo"
+  # }
 }
 
 provider "google" {
