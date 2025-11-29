@@ -93,8 +93,10 @@ data:
         }
       }
       external_labels = {
-        cluster = "pyroscope-demo",
-        agent   = "grafana-alloy",
+        cluster            = "pyroscope-demo",
+        agent              = "grafana-alloy",
+        service_repository = "https://github.com/alvarowops/Demo-pyroscope-cloudsummitlatam",
+        service_git_ref    = "main",
       }
     }
 
