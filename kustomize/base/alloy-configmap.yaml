@@ -82,6 +82,13 @@ data:
         replacement  = "main"
         action       = "replace"
       }
+
+      // Path to Java source files relative to repo root
+      rule {
+        target_label = "service_root_path"
+        replacement  = "demo-app/src/main/java"
+        action       = "replace"
+      }
     }
 
     // Auto-instrumentation for Java using async-profiler
